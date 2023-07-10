@@ -2144,6 +2144,12 @@ private:
             : [ a ] "%[lo]"(a), [ b ] "rm"(b)
             : "cc");
             // clang-format on
+#elif defined(__s390__)
+    __asm__("mulq %[b]"
+            : [ lo ] "=a"(res.lo), [ hi ] "=d"(res.hi)
+            : [ a ] "%[lo]"(a), [ b ] "rm"(b)
+            : "cc");
+            // clang-format on
 #elif defined(__aarch64__)
         typeD x;
         x.hi = 0;
