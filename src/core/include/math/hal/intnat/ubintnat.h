@@ -2145,11 +2145,29 @@ private:
             : "cc");
             // clang-format on
 #elif defined(__s390__)
-    __asm__("mulq %[b]"
-            : [ lo ] "=a"(res.lo), [ hi ] "=d"(res.hi)
-            : [ a ] "%[lo]"(a), [ b ] "rm"(b)
-            : "cc");
-            // clang-format on
+     U64BITS a1 = a >> 32;
+        U64BITS a2 = (uint32_t)a;
+        U64BITS b1 = b >> 32;
+        U64BITS b2 = (uint32_t)b;
+
+        // use schoolbook multiplication
+        res.hi            = a1 * b1;
+        res.lo            = a2 * b2;
+        U64BITS lowBefore = res.lo;
+
+        U64BITS p1   = a2 * b1;
+        U64BITS p2   = a1 * b2;
+        U64BITS temp = p1 + p2;
+        res.hi += temp >> 32;
+        res.lo += U64BITS((uint32_t)temp) << 32;
+
+        // adds the carry to the high word
+        if (lowBefore > res.lo)
+            res.hi++;
+
+        // if there is an overflow in temp, add 2^32
+        if ((temp < p1) || (temp < p2))
+            res.hi += (U64BITS)1 << 32;
 #elif defined(__aarch64__)
         typeD x;
         x.hi = 0;
