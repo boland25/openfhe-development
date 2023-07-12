@@ -2159,8 +2159,8 @@ private:
         res.lo            = a1 * b1;
         U64BITS lowBefore = res.lo;
 
-        U64BITS p1   = a2 * b1;
-        U64BITS p2   = a1 * b2;
+        U64BITS p1   = a1 * b2;
+        U64BITS p2   = a2 * b1;
         U64BITS temp = p1 + p2;
         res.hi += temp >> 32;
         res.lo += U64BITS((uint32_t)temp) << 32;
