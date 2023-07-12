@@ -2145,14 +2145,18 @@ private:
             : "cc");
             // clang-format on
 #elif defined(__s390__)
+     //this is now the high part  
      U64BITS a1 = a >> 32;
+     //low part
         U64BITS a2 = (uint32_t)a;
+        //high part
         U64BITS b1 = b >> 32;
+        //low part
         U64BITS b2 = (uint32_t)b;
 
         // use schoolbook multiplication
-        res.hi            = a1 * b1;
-        res.lo            = a2 * b2;
+        res.hi            = a2 * b2;
+        res.lo            = a1 * b1;
         U64BITS lowBefore = res.lo;
 
         U64BITS p1   = a2 * b1;
