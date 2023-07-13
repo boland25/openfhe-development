@@ -40,6 +40,7 @@
 // #include <fstream>
 #include <functional>
 #include <iostream>
+#include <bitset>
 #include <limits>
 // #include <memory>
 // #include <sstream>
@@ -2149,6 +2150,10 @@ private:
         U64BITS a2 = (uint32_t)a;
         U64BITS b1 = b >> 32;
         U64BITS b2 = (uint32_t)b;
+        std::cout << "a1 = " << std::bitset<64>(a1)  << std::endl;
+        std::cout << "a2 = " << std::bitset<64>(a2)  << std::endl;
+        std::cout << "b1 = " << std::bitset<64>(b1) << std::endl;
+        std::cout << "b2 = " << std::bitset<64>(b2) << std::endl;
 
         // use schoolbook multiplication
         res.hi            = a1 * b1;
