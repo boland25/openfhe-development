@@ -1928,33 +1928,11 @@ private:
             : "cc");
             // clang-format on
 #elif defined(__s390__)
-     U64BITS a1 = a >> 32;
-        U64BITS a2 = (uint32_t)a;
-        U64BITS b1 = b >> 32;
-        U64BITS b2 = (uint32_t)b;
-        std::cout << "a1 = " << std::bitset<64>(a1)  << std::endl;
-        std::cout << "a2 = " << std::bitset<64>(a2)  << std::endl;
-        std::cout << "b1 = " << std::bitset<64>(b1) << std::endl;
-        std::cout << "b2 = " << std::bitset<64>(b2) << std::endl;
+        U128BITS wres(0), wa(a), wb(b);
+        wres   = wa * wb;
+        res.hi = (uint64_t)(wres >> 64);
+        res.lo = (uint64_t)wres;
 
-        // use schoolbook multiplication
-        res.hi            = a1 * b1;
-        res.lo            = a2 * b2;
-        U64BITS lowBefore = res.lo;
-
-        U64BITS p1   = a2 * b1;
-        U64BITS p2   = a1 * b2;
-        U64BITS temp = p1 + p2;
-        res.hi += temp >> 32;
-        res.lo += U64BITS((uint32_t)temp) << 32;
-
-        // adds the carry to the high word
-        if (lowBefore > res.lo)
-            res.hi++;
-
-        // if there is an overflow in temp, add 2^32
-        if ((temp < p1) || (temp < p2))
-            res.hi += (U64BITS)1 << 32;
 #elif defined(__aarch64__)
         typeD x;
         x.hi = 0;
