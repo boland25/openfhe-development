@@ -1927,6 +1927,7 @@ private:
             : [ a ] "%[lo]"(a), [ b ] "rm"(b)
             : "cc");
             // clang-format on
+    #endif
 #elif defined(__s390__)
         U128BITS wres(0), wa(a), wb(b);
         wres   = wa * wb;
