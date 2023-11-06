@@ -32,6 +32,8 @@
 #ifndef _BINFHE_CONSTANTS_H_
 #define _BINFHE_CONSTANTS_H_
 
+#include "lattice/constants-lattice.h"
+
 #include <cstdint>
 #include <iosfwd>
 
@@ -44,43 +46,59 @@ using LWEPlaintextModulus = uint64_t;
  * @brief Security levels for predefined parameter sets
  */
 enum BINFHE_PARAMSET {
-    TOY,             // no security
-    MEDIUM,          // 108 bits of security for classical and 100 bits for quantum
-    STD128_LMKCDEY,  // Optimized for LMKCDEY (using Gaussian secrets) -
-                     // more than 128 bits of security for classical computer attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD128_AP,       // Optimized for AP (has higher failure probability for GINX) -
-                     // more than 128 bits of security for classical
-                     // computer attacks - uses the same setup as HE standard
-    STD128_APOPT,    // Optimized for AP (has higher failure probability for GINX) -
-                     // more than 128 bits of security for classical computer attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD128,          // more than 128 bits of security for classical
-                     // computer attacks - uses the same setup as HE standard
-    STD128_OPT,      // more than 128 bits of security for classical computer attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD192,          // more than 192 bits of security for classical computer attacks -
-                     // uses the same setup as HE standard
-    STD192_OPT,      // more than 192 bits of security for classical computer attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD256,          // more than 256 bits of security for classical computer attacks -
-                     // uses the same setup as HE standard
-    STD256_OPT,      // more than 256 bits of security for classical computer attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD128Q,         // more than 128 bits of security for quantum attacks - uses the
-                     // same setup as HE standard
-    STD128Q_OPT,     // more than 128 bits of security for quantum attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD192Q,         // more than 192 bits of security for quantum attacks - uses the
-                     // same setup as HE standard
-    STD192Q_OPT,     // more than 192 bits of security for quantum attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    STD256Q,         // more than 256 bits of security for quantum attacks - uses the
-                     // same setup as HE standard
-    STD256Q_OPT,     // more than 256 bits of security for quantum attacks -
-                     // optimize runtime by finding a non-power-of-two n
-    SIGNED_MOD_TEST  // special parameter set for confirming the signed modular
-                     // reduction in the accumulator updates works correctly
+    TOY,                // no security
+    MEDIUM,             // 108 bits of security for classical and 100 bits for quantum
+    STD128_LMKCDEY,     // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD128_AP,          // Optimized for AP (has higher failure probability for GINX) -
+                        // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD128,             // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD192,             // more than 192 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD256,             // more than 256 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD128Q,            // more than 128 bits of security for quantum attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD128Q_LMKCDEY,    // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for quantum attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD192Q,            // more than 192 bits of security for quantum attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD256Q,            // more than 256 bits of security for quantum attacks -
+                        // optimize runtime by finding a non-power-of-two n
+    STD128_3,           // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD128_3_LMKCDEY,   // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD128Q_3,          // more than 128 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD128Q_3_LMKCDEY,  // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD192Q_3,          // more than 192 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD256Q_3,          // more than 256 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 3 binary inputs
+    STD128_4,           // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    STD128_4_LMKCDEY,   // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for classical computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    STD128Q_4,          // more than 128 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    STD128Q_4_LMKCDEY,  // Optimized for LMKCDEY (using Gaussian secrets) -
+                        // more than 128 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    STD192Q_4,          // more than 192 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    STD256Q_4,          // more than 256 bits of security for quantum computer attacks -
+                        // optimize runtime by finding a non-power-of-two n for 4 binary inputs
+    SIGNED_MOD_TEST     // special parameter set for confirming the signed modular
+                        // reduction in the accumulator updates works correctly
 };
 std::ostream& operator<<(std::ostream& s, BINFHE_PARAMSET f);
 
@@ -96,24 +114,22 @@ enum BINFHE_OUTPUT {
 };
 std::ostream& operator<<(std::ostream& s, BINFHE_OUTPUT f);
 
+/**
+ * @brief Bootstrapping method
+ */
 enum BINFHE_METHOD {
     INVALID_METHOD = 0,
-    AP,    // Ducas-Micciancio variant
-    GINX,  // Chillotti-Gama-Georgieva-Izabachene variant
-    LMKCDEY, // Lee-Micciancio-Kim-Choi-Deryabin-Eom-Yoo variant, ia.cr/2022/198
+    AP,       // Ducas-Micciancio variant
+    GINX,     // Chillotti-Gama-Georgieva-Izabachene variant
+    LMKCDEY,  // Lee-Micciancio-Kim-Choi-Deryabin-Eom-Yoo variant, ia.cr/2022/198
 };
 std::ostream& operator<<(std::ostream& s, BINFHE_METHOD f);
 
-enum BINGATE { OR, AND, NOR, NAND, XOR_FAST, XNOR_FAST, XOR, XNOR };
-std::ostream& operator<<(std::ostream& s, BINGATE f);
-
 /**
- * @brief Lists all modes for secret keys supported
+ * @brief Type of gates supported, with two, three or four inputs
  */
-enum SECRET_KEY_DIST {
-    GAUSSIAN        = 0,
-    UNIFORM_TERNARY = 1,
-};
+enum BINGATE { OR, AND, NOR, NAND, XOR_FAST, XNOR_FAST, MAJORITY, AND3, OR3, AND4, OR4, CMUX, XOR, XNOR };
+std::ostream& operator<<(std::ostream& s, BINGATE f);
 
 /**
  * @brief Type of ciphertext generated by the Encrypt method

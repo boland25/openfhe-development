@@ -29,53 +29,61 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //==================================================================================
 
-/*
-  parameters for generalized double-crt parameters
- */
-
-#ifndef LBCRYPTO_INC_LATTICE_ILDCRTPARAMS_IMPL_H
-#define LBCRYPTO_INC_LATTICE_ILDCRTPARAMS_IMPL_H
-
-#include "lattice/elemparams.h"
-#include "lattice/ildcrtparams.h"
-
-#include "math/hal.h"
-#include "math/nbtheory-impl.h"
-
+#include "lattice/constants-lattice.h"
 #include "utils/exception.h"
-#include "utils/inttypes.h"
 
-#include <memory>
+#include <string>
+#include <ostream>
 
 namespace lbcrypto {
 
-template <typename IntType>
-ILDCRTParams<IntType>::ILDCRTParams(usint order, usint depth, usint bits) : ElemParams<IntType>(order, 0) {
-    if (order == 0)
-        return;
-    if (depth == 0)
-        OPENFHE_THROW(config_error, "Invalid depth for ILDCRTParams");
-    if (bits == 0 || bits > 64)
-        OPENFHE_THROW(config_error, "Invalid bits for ILDCRTParams");
+SecretKeyDist convertToSecretKeyDist(const std::string& str) {
+    if (str == "GAUSSIAN")
+        return GAUSSIAN;
+    else if (str == "UNIFORM_TERNARY")
+        return UNIFORM_TERNARY;
+    else if (str == "SPARSE_TERNARY")
+        return SPARSE_TERNARY;
+    // else if (str == "BINARY")
+    //     return BINARY;
 
-    m_parms.resize(depth);
-    this->ciphertextModulus = IntType(0);
-
-    NativeInteger q = FirstPrime<NativeInteger>(bits, order);
-
-    for (size_t j = 0;;) {
-        NativeInteger root = RootOfUnity<NativeInteger>(order, q);
-        m_parms[j]         = std::make_shared<ILNativeParams>(order, q, root);
-
-        if (++j >= depth)
+    std::string errMsg(std::string("Unknown SecretKeyDist ") + str);
+    OPENFHE_THROW(config_error, errMsg);
+}
+SecretKeyDist convertToSecretKeyDist(uint32_t num) {
+    auto keyDist = static_cast<SecretKeyDist>(num);
+    switch (keyDist) {
+        case GAUSSIAN:
+        case UNIFORM_TERNARY:
+        case SPARSE_TERNARY:
+            // case BINARY:
+            return keyDist;
+        default:
             break;
-
-        q = NextPrime<NativeInteger>(q, order);
     }
 
-    RecalculateModulus();
+    std::string errMsg(std::string("Unknown value for SecretKeyDist ") + std::to_string(num));
+    OPENFHE_THROW(config_error, errMsg);
+}
+std::ostream& operator<<(std::ostream& s, SecretKeyDist m) {
+    switch (m) {
+        case GAUSSIAN:
+            s << "GAUSSIAN";
+            break;
+        case UNIFORM_TERNARY:
+            s << "UNIFORM_TERNARY";
+            break;
+        case SPARSE_TERNARY:
+            s << "SPARSE_TERNARY";
+            break;
+            // case BINARY:
+            //     s << "BINARY";
+            break;
+        default:
+            s << "UNKNOWN";
+            break;
+    }
+    return s;
 }
 
 }  // namespace lbcrypto
-
-#endif

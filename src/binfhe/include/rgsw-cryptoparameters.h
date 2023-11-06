@@ -63,29 +63,36 @@ public:
     /**
    * Main constructor for RingGSWCryptoParams
    *
-   * @param lweparams a shared poiter to an instance of LWECryptoParams
+   * @param N ring dimension for RingGSW/RLWE used in bootstrapping
+   * @param Q modulus for RingGSW/RLWE used in bootstrapping
+   * @param q ciphertext modulus for additive LWE
    * @param baseG the gadget base used in the bootstrapping
    * @param baseR the base for the refreshing key
    * @param method bootstrapping method (DM or CGGI or LMKCDEY)
+   * @param std standar deviation
+   * @param keyDist secret key distribution
+   * @param signEval flag if sign evaluation is needed
+   * @param numAutoKeys number of automorphism keys in LMKCDEY bootstrapping
    */
     explicit RingGSWCryptoParams(uint32_t N, NativeInteger Q, NativeInteger q, uint32_t baseG, uint32_t baseR,
-                                 BINFHE_METHOD method, double std, SECRET_KEY_DIST keyDist = UNIFORM_TERNARY,
-                                 bool signEval = false)
-        : m_N(N), m_Q(Q), m_q(q), m_baseG(baseG), m_baseR(baseR), m_method(method), m_keyDist(keyDist) {
-        if (!IsPowerOfTwo(baseG)) {
+                                 BINFHE_METHOD method, double std, SecretKeyDist keyDist = UNIFORM_TERNARY,
+                                 bool signEval = false, uint32_t numAutoKeys = 10)
+        : m_Q(Q),
+          m_q(q),
+          m_N(N),
+          m_baseG(baseG),
+          m_baseR(baseR),
+          m_polyParams{std::make_shared<ILNativeParams>(2 * N, Q)},
+          m_method(method),
+          m_keyDist(keyDist),
+          m_numAutoKeys(numAutoKeys) {
+        if (!IsPowerOfTwo(baseG))
             OPENFHE_THROW(config_error, "Gadget base should be a power of two.");
-        }
-
+        if ((method == LMKCDEY) & (numAutoKeys == 0))
+            OPENFHE_THROW(config_error, "numAutoKeys should be greater than 0.");
+        auto logQ{log(m_Q.ConvertToDouble())};
+        m_digitsG = static_cast<uint32_t>(std::ceil(logQ / log(static_cast<double>(m_baseG))));
         m_dgg.SetStd(std);
-
-        NativeInteger rootOfUnity = RootOfUnity<NativeInteger>(2 * N, Q);
-
-        // Precomputes the table with twiddle factors to support fast NTT
-        ChineseRemainderTransformFTT<NativeVector>().PreCompute(rootOfUnity, 2 * N, Q);
-
-        m_polyParams = std::make_shared<ILNativeParams>(2 * N, Q, rootOfUnity);
-        m_digitsG    = (uint32_t)std::ceil(log(Q.ConvertToDouble()) / log(static_cast<double>(m_baseG)));
-
         PreCompute(signEval);
     }
 
@@ -116,6 +123,10 @@ public:
 
     uint32_t GetBaseR() const {
         return m_baseR;
+    }
+
+    uint32_t GetNumAutoKeys() const {
+        return m_numAutoKeys;
     }
 
     const std::vector<NativeInteger>& GetDigitsR() const {
@@ -154,7 +165,7 @@ public:
         return m_method;
     }
 
-    SECRET_KEY_DIST GetKeyDist() const {
+    SecretKeyDist GetKeyDist() const {
         return m_keyDist;
     }
 
@@ -177,6 +188,7 @@ public:
         ar(::cereal::make_nvp("bs", m_dgg.GetStd()));
         ar(::cereal::make_nvp("bdigitsG", m_digitsG));
         ar(::cereal::make_nvp("bparams", m_polyParams));
+        ar(::cereal::make_nvp("numAutoKeys", m_numAutoKeys));
     }
 
     template <class Archive>
@@ -196,11 +208,12 @@ public:
         m_dgg.SetStd(sigma);
         ar(::cereal::make_nvp("bdigitsG", m_digitsG));
         ar(::cereal::make_nvp("bparams", m_polyParams));
+        ar(::cereal::make_nvp("numAutoKeys", m_numAutoKeys));
 
         PreCompute();
     }
 
-    std::string SerializedObjectName() const {
+    std::string SerializedObjectName() const override {
         return "RingGSWCryptoParams";
     }
     static uint32_t SerializedVersion() {
@@ -209,30 +222,31 @@ public:
 
     void Change_BaseG(uint32_t BaseG) {
         if (m_baseG != BaseG) {
-            m_baseG   = BaseG;
-            m_Gpower  = m_Gpower_map[m_baseG];
-            m_digitsG = (uint32_t)std::ceil(log(m_Q.ConvertToDouble()) / log(static_cast<double>(m_baseG)));
+            m_baseG  = BaseG;
+            m_Gpower = m_Gpower_map[m_baseG];
+            m_digitsG =
+                static_cast<uint32_t>(std::ceil(log(m_Q.ConvertToDouble()) / log(static_cast<double>(m_baseG))));
         }
     }
 
 private:
-    // ring dimension for RingGSW/RingLWE scheme
-    uint32_t m_N = 0;
-
     // modulus for the RingGSW/RingLWE scheme
-    NativeInteger m_Q = 0;
+    NativeInteger m_Q{};
 
     // modulus for the RingLWE scheme
-    NativeInteger m_q = 0;
+    NativeInteger m_q{};
+
+    // ring dimension for RingGSW/RingLWE scheme
+    uint32_t m_N{};
 
     // gadget base used in bootstrapping
-    uint32_t m_baseG = 0;
-
-    // number of digits in decomposing integers mod Q
-    uint32_t m_digitsG = 0;
+    uint32_t m_baseG{};
 
     // base used for the refreshing key (used only for DM bootstrapping)
-    uint32_t m_baseR = 0;
+    uint32_t m_baseR{};
+
+    // number of digits in decomposing integers mod Q
+    uint32_t m_digitsG{};
 
     // powers of m_baseR (used only for DM bootstrapping)
     std::vector<NativeInteger> m_digitsR;
@@ -265,10 +279,13 @@ private:
     std::vector<NativePoly> m_monomials;
 
     // Bootstrapping method (DM or CGGI or LMKCDEY)
-    BINFHE_METHOD m_method = BINFHE_METHOD::INVALID_METHOD;
+    BINFHE_METHOD m_method{BINFHE_METHOD::INVALID_METHOD};
 
     // Secret key distribution: GAUSSIAN, UNIFORM_TERNARY, etc.
-    SECRET_KEY_DIST m_keyDist = UNIFORM_TERNARY;
+    SecretKeyDist m_keyDist{SecretKeyDist::UNIFORM_TERNARY};
+
+    // number of automorphism keys (used only for LMKCDEY bootstrapping)
+    uint32_t m_numAutoKeys{};
 };
 
 }  // namespace lbcrypto

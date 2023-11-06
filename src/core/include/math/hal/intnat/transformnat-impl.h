@@ -36,13 +36,14 @@
 //            declared in math/intnat/transformnat.h and
 //            MUST be included in the end of math/intnat/transformnat.h ONLY
 //            and nowhere else
-#include "math/nbtheory.h"
 #include "math/hal/basicint.h"
 #include "math/hal/intnat/ubintnat.h"
 #include "math/hal/intnat/mubintvecnat.h"
 #include "math/hal/intnat/transformnat.h"
+#include "math/nbtheory.h"
 
 #include "utils/exception.h"
+#include "utils/inttypes.h"
 #include "utils/utilities.h"
 
 #include <map>
@@ -131,7 +132,7 @@ void NumberTheoreticTransformNat<VecType>::ForwardTransformIterative(const VecTy
     IntType mu   = modulus.ComputeMu();
     result->SetModulus(modulus);
 
-    usint msb = lbcrypto::GetMSB64(n - 1);
+    usint msb = lbcrypto::GetMSB(n - 1);
     for (size_t i = 0; i < n; i++) {
         (*result)[i] = element[lbcrypto::ReverseBits(i, msb)];
     }
@@ -139,7 +140,7 @@ void NumberTheoreticTransformNat<VecType>::ForwardTransformIterative(const VecTy
     IntType omega, omegaFactor, oddVal, evenVal;
     usint logm, i, j, indexEven, indexOdd;
 
-    usint logn = lbcrypto::GetMSB64(n - 1);
+    usint logn = lbcrypto::GetMSB(n - 1);
     for (logm = 1; logm <= logn; logm++) {
         // calculate the i indexes into the root table one time per loop
         std::vector<usint> indexes(1 << (logm - 1));
@@ -200,10 +201,10 @@ void NumberTheoreticTransformNat<VecType>::ForwardTransformToBitReverseInPlace(c
     IntType mu      = modulus.ComputeMu();
 
     usint i, m, j1, j2, indexOmega, indexLo, indexHi;
-    IntType omega, omegaFactor, loVal, hiVal, zero(0);
+    IntType omega, omegaFactor, loVal, hiVal;
 
     usint t     = (n >> 1);
-    usint logt1 = lbcrypto::GetMSB64(t);
+    usint logt1 = lbcrypto::GetMSB(t);
     for (m = 1; m < n; m <<= 1) {
         for (i = 0; i < m; ++i) {
             j1         = i << logt1;
@@ -257,7 +258,7 @@ void NumberTheoreticTransformNat<VecType>::ForwardTransformToBitReverse(const Ve
     }
 
     usint t     = (n >> 1);
-    usint logt1 = lbcrypto::GetMSB64(t);
+    usint logt1 = lbcrypto::GetMSB(t);
     for (m = 1; m < n; m <<= 1) {
         for (i = 0; i < m; ++i) {
             j1         = i << logt1;
@@ -299,44 +300,56 @@ template <typename VecType>
 void NumberTheoreticTransformNat<VecType>::ForwardTransformToBitReverseInPlace(const VecType& rootOfUnityTable,
                                                                                const VecType& preconRootOfUnityTable,
                                                                                VecType* element) {
-    auto modulus = element->GetModulus();
-    usint n      = (element->GetLength() >> 1);
-    usint t      = n;
-    usint logt1  = lbcrypto::GetMSB64(t);
-    for (usint m = 1; m < n; m <<= 1, t >>= 1, --logt1) {
-        for (usint i = 0; i < m; ++i) {
-            usint j1         = i << logt1;
-            usint j2         = j1 + t;
-            usint indexOmega = i + m;
-            auto omega       = rootOfUnityTable[indexOmega];
-            auto preconOmega = preconRootOfUnityTable[indexOmega];
-            for (usint indexLo = j1; indexLo < j2; ++indexLo) {
-                usint indexHi    = indexLo + t;
-                auto omegaFactor = (*element)[indexHi];
+    auto modulus{element->GetModulus()};
+    uint32_t n(element->GetLength() >> 1), t{n}, logt{lbcrypto::GetMSB(t)};
+    for (uint32_t m{1}; m < n; m <<= 1, t >>= 1, --logt) {
+        for (uint32_t i{0}; i < m; ++i) {
+            auto omega{rootOfUnityTable[i + m]};
+            auto preconOmega{preconRootOfUnityTable[i + m]};
+            for (uint32_t j1{i << logt}, j2{j1 + t}; j1 < j2; ++j1) {
+                auto omegaFactor{(*element)[j1 + t]};
                 omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
-                auto loVal = (*element)[indexLo];
-
+                auto loVal{(*element)[j1 + 0]};
+#if defined(__GNUC__) && !defined(__clang__)
+                auto hiVal{loVal + omegaFactor};
+                if (hiVal >= modulus)
+                    hiVal -= modulus;
+                if (loVal < omegaFactor)
+                    loVal += modulus;
+                loVal -= omegaFactor;
+                (*element)[j1 + 0] = hiVal;
+                (*element)[j1 + t] = loVal;
+#else
                 // fixes Clang slowdown issue, but requires lowVal be less than modulus
-                (*element)[indexLo] += omegaFactor - (omegaFactor >= (modulus - loVal) ? modulus : 0);
+                (*element)[j1 + 0] += omegaFactor - (omegaFactor >= (modulus - loVal) ? modulus : 0);
                 if (omegaFactor > loVal)
                     loVal += modulus;
-                (*element)[indexHi] = loVal - omegaFactor;
+                (*element)[j1 + t] = loVal - omegaFactor;
+#endif
             }
         }
     }
-    for (usint i = 0; i < n; ++i) {
-        usint j1         = i << 1;
-        usint j2         = j1 + 1;
-        usint indexOmega = i + n;
-        auto omegaFactor = (*element)[j2];
-        auto omega       = rootOfUnityTable[indexOmega];
-        auto preconOmega = preconRootOfUnityTable[indexOmega];
+    for (uint32_t i{0}; i < (n << 1); i += 2) {
+        auto omegaFactor{(*element)[i + 1]};
+        auto omega{rootOfUnityTable[(i >> 1) + n]};
+        auto preconOmega{preconRootOfUnityTable[(i >> 1) + n]};
         omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
-        auto loVal = (*element)[j1];
-        (*element)[j1] += omegaFactor - (omegaFactor >= (modulus - loVal) ? modulus : 0);
+        auto loVal{(*element)[i + 0]};
+#if defined(__GNUC__) && !defined(__clang__)
+        auto hiVal{loVal + omegaFactor};
+        if (hiVal >= modulus)
+            hiVal -= modulus;
+        if (loVal < omegaFactor)
+            loVal += modulus;
+        loVal -= omegaFactor;
+        (*element)[i + 0] = hiVal;
+        (*element)[i + 1] = loVal;
+#else
+        (*element)[i + 0] += omegaFactor - (omegaFactor >= (modulus - loVal) ? modulus : 0);
         if (omegaFactor > loVal)
             loVal += modulus;
-        (*element)[j2] = loVal - omegaFactor;
+        (*element)[i + t] = loVal - omegaFactor;
+#endif
     }
 }
 
@@ -364,7 +377,7 @@ void NumberTheoreticTransformNat<VecType>::ForwardTransformToBitReverse(const Ve
     IntType omega, omegaFactor, loVal, hiVal, zero(0);
 
     usint t     = (n >> 1);
-    usint logt1 = lbcrypto::GetMSB64(t);
+    usint logt1 = lbcrypto::GetMSB(t);
     for (uint32_t m = 1; m < n; m <<= 1, t >>= 1, --logt1) {
         uint32_t j1, j2;
         for (uint32_t i = 0; i < m; ++i) {
@@ -479,44 +492,60 @@ template <typename VecType>
 void NumberTheoreticTransformNat<VecType>::InverseTransformFromBitReverseInPlace(
     const VecType& rootOfUnityInverseTable, const VecType& preconRootOfUnityInverseTable, const IntType& cycloOrderInv,
     const IntType& preconCycloOrderInv, VecType* element) {
-    auto modulus = element->GetModulus();
-    usint n      = element->GetLength() >> 1;
-    for (usint i = 0; i < n; ++i) {
-        usint j1         = i << 1;
-        usint j2         = j1 + 1;
-        usint indexOmega = i + n;
-        auto omega       = rootOfUnityInverseTable[indexOmega];
-        auto preconOmega = preconRootOfUnityInverseTable[indexOmega];
-        auto hiVal       = (*element)[j2];
-        auto loVal       = (*element)[j1];
-        auto omegaFactor = loVal + (hiVal > loVal ? modulus : 0) - hiVal;
+    auto modulus{element->GetModulus()};
+    uint32_t n(element->GetLength());
+    for (uint32_t i{0}; i < n; i += 2) {
+        auto omega{rootOfUnityInverseTable[(i + n) >> 1]};
+        auto preconOmega{preconRootOfUnityInverseTable[(i + n) >> 1]};
+        auto hiVal{(*element)[i + 1]};
+        auto loVal{(*element)[i + 0]};
+#if defined(__GNUC__) && !defined(__clang__)
+        auto omegaFactor{loVal};
+        if (omegaFactor < hiVal)
+            omegaFactor += modulus;
+        omegaFactor -= hiVal;
         loVal += hiVal;
-        omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
-        (*element)[j2] = omegaFactor.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
         if (loVal >= modulus)
             loVal -= modulus;
-        (*element)[j1] = loVal.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
+        loVal.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
+        omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
+        omegaFactor.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
+        (*element)[i + 0] = loVal;
+        (*element)[i + 1] = omegaFactor;
+#else
+        auto omegaFactor{loVal + (hiVal > loVal ? modulus : 0) - hiVal};
+        loVal += hiVal - (hiVal >= (modulus - loVal) ? modulus : 0);
+        loVal.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
+        (*element)[i + 0] = loVal;
+        omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
+        omegaFactor.ModMulFastConstEq(cycloOrderInv, modulus, preconCycloOrderInv);
+        (*element)[i + 1] = omegaFactor;
+#endif
     }
-    usint t     = 2;
-    usint logt1 = 2;
-    for (usint m = (n >> 1); m >= 1; m >>= 1, t <<= 1, ++logt1) {
-        for (usint i = 0; i < m; ++i) {
-            usint j1         = i << logt1;
-            usint j2         = j1 + t;
-            usint indexOmega = i + m;
-            auto omega       = rootOfUnityInverseTable[indexOmega];
-            auto preconOmega = preconRootOfUnityInverseTable[indexOmega];
-            for (usint indexLo = j1; indexLo < j2; ++indexLo) {
-                usint indexHi = indexLo + t;
-                auto hiVal    = (*element)[indexHi];
-                auto loVal    = (*element)[indexLo];
-                auto omegaFactor = loVal + (hiVal > loVal ? modulus : 0) - hiVal;
+    for (uint32_t m{n >> 2}, t{2}, logt{2}; m >= 1; m >>= 1, t <<= 1, ++logt) {
+        for (uint32_t i{0}; i < m; ++i) {
+            auto omega{rootOfUnityInverseTable[i + m]};
+            auto preconOmega{preconRootOfUnityInverseTable[i + m]};
+            for (uint32_t j1{i << logt},  j2{j1 + t}; j1 < j2; ++j1) {
+                auto hiVal{(*element)[j1 + t]};
+                auto loVal{(*element)[j1 + 0]};
+#if defined(__GNUC__) && !defined(__clang__)
+                auto omegaFactor{loVal};
+                if (omegaFactor < hiVal)
+                    omegaFactor += modulus;
+                omegaFactor -= hiVal;
                 loVal += hiVal;
-                omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
-                (*element)[indexHi] = omegaFactor;
                 if (loVal >= modulus)
                     loVal -= modulus;
-                (*element)[indexLo] = loVal;
+                omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
+                (*element)[j1 + 0] = loVal;
+                (*element)[j1 + t] = omegaFactor;
+#else
+                (*element)[j1 + 0] += hiVal - (hiVal >= (modulus - loVal) ? modulus : 0);
+                auto omegaFactor = loVal + (hiVal > loVal ? modulus : 0) - hiVal;
+                omegaFactor.ModMulFastConstEq(omega, modulus, preconOmega);
+                (*element)[j1 + t] = omegaFactor;
+#endif
             }
         }
     }
@@ -626,7 +655,7 @@ void ChineseRemainderTransformFTTNat<VecType>::InverseTransformFromBitReverseInP
         PreCompute(rootOfUnity, CycloOrder, modulus);
     }
 
-    usint msb = lbcrypto::GetMSB64(CycloOrderHf - 1);
+    usint msb = lbcrypto::GetMSB(CycloOrderHf - 1);
     NumberTheoreticTransformNat<VecType>().InverseTransformFromBitReverseInPlace(
         m_rootOfUnityInverseReverseTableByModulus[modulus], m_rootOfUnityInversePreconReverseTableByModulus[modulus],
         m_cycloOrderInverseTableByModulus[modulus][msb], m_cycloOrderInversePreconTableByModulus[modulus][msb],
@@ -664,7 +693,7 @@ void ChineseRemainderTransformFTTNat<VecType>::InverseTransformFromBitReverse(co
         (*result)[i] = element[i];
     }
 
-    usint msb = lbcrypto::GetMSB64(CycloOrderHf - 1);
+    usint msb = lbcrypto::GetMSB(CycloOrderHf - 1);
     NumberTheoreticTransformNat<VecType>().InverseTransformFromBitReverseInPlace(
         m_rootOfUnityInverseReverseTableByModulus[modulus], m_rootOfUnityInversePreconReverseTableByModulus[modulus],
         m_cycloOrderInverseTableByModulus[modulus][msb], m_cycloOrderInversePreconTableByModulus[modulus][msb], result);
@@ -683,7 +712,7 @@ void ChineseRemainderTransformFTTNat<VecType>::PreCompute(const IntType& rootOfU
 #pragma omp critical
         {
             IntType x(1), xinv(1);
-            usint msb  = lbcrypto::GetMSB64(CycloOrderHf - 1);
+            usint msb  = lbcrypto::GetMSB(CycloOrderHf - 1);
             IntType mu = modulus.ComputeMu();
             VecType Table(CycloOrderHf, modulus);
             VecType TableI(CycloOrderHf, modulus);
@@ -761,7 +790,7 @@ template <typename VecType>
 void BluesteinFFTNat<VecType>::PreComputeDefaultNTTModulusRoot(usint cycloOrder, const IntType& modulus) {
     usint nttDim          = pow(2, ceil(log2(2 * cycloOrder - 1)));
     const auto nttModulus = lbcrypto::FirstPrime<IntType>(log2(nttDim) + 2 * modulus.GetMSB(), nttDim);
-    const auto nttRoot    = RootOfUnity(nttDim, nttModulus);
+    const auto nttRoot    = lbcrypto::RootOfUnity<IntType>(nttDim, nttModulus);
     const ModulusRoot<IntType> nttModulusRoot = {nttModulus, nttRoot};
     m_defaultNTTModulusRoot[modulus]          = nttModulusRoot;
 

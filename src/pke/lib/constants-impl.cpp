@@ -60,48 +60,8 @@ std::ostream& operator<<(std::ostream& s, PKESchemeFeature f) {
         case FHE:
             s << "FHE";
             break;
-        default:
-            s << "UNKNOWN";
-            break;
-    }
-    return s;
-}
-
-SecretKeyDist convertToSecretKeyDist(const std::string& str) {
-    if (str == "GAUSSIAN")
-        return GAUSSIAN;
-    else if (str == "UNIFORM_TERNARY")
-        return UNIFORM_TERNARY;
-    else if (str == "SPARSE_TERNARY")
-        return SPARSE_TERNARY;
-
-    std::string errMsg(std::string("Unknown SecretKeyDist ") + str);
-    OPENFHE_THROW(config_error, errMsg);
-}
-SecretKeyDist convertToSecretKeyDist(uint32_t num) {
-    auto keyDist = static_cast<SecretKeyDist>(num);
-    switch (keyDist) {
-        case GAUSSIAN:
-        case UNIFORM_TERNARY:
-        case SPARSE_TERNARY:
-            return keyDist;
-        default:
-            break;
-    }
-
-    std::string errMsg(std::string("Unknown value for SecretKeyDist ") + std::to_string(num));
-    OPENFHE_THROW(config_error, errMsg);
-}
-std::ostream& operator<<(std::ostream& s, SecretKeyDist m) {
-    switch (m) {
-        case GAUSSIAN:
-            s << "GAUSSIAN";
-            break;
-        case UNIFORM_TERNARY:
-            s << "UNIFORM_TERNARY";
-            break;
-        case SPARSE_TERNARY:
-            s << "SPARSE_TERNARY";
+        case SCHEMESWITCH:
+            s << "SCHEMESWITCH";
             break;
         default:
             s << "UNKNOWN";
@@ -209,8 +169,12 @@ std::ostream& operator<<(std::ostream& s, ProxyReEncryptionMode p) {
             s << "INDCPA";
             break;
         case FIXED_NOISE_HRA:
-            SecretKeyDist convertToSecretKeyDist(uint32_t num);
-
+            s << "FIXED_NOISE_HRA";
+            break;
+        case NOISE_FLOODING_HRA:
+            s << "NOISE_FLOODING_HRA";
+            break;
+        case DIVIDE_AND_ROUND_HRA:
             s << "DIVIDE_AND_ROUND_HRA";
             break;
         default:
@@ -476,6 +440,43 @@ std::ostream& operator<<(std::ostream& s, PlaintextEncodings p) {
             s << "CKKS_PACKED_ENCODING";
             break;
         case INVALID_ENCODING:
+        default:
+            s << "UNKNOWN";
+            break;
+    }
+    return s;
+}
+
+COMPRESSION_LEVEL convertToCompressionLevel(const std::string& str) {
+    if (str == "COMPACT")
+        return COMPACT;
+    else if (str == "SLACK")
+        return SLACK;
+
+    std::string errMsg(std::string("Unknown COMPRESSION_LEVEL ") + str);
+    OPENFHE_THROW(config_error, errMsg);
+}
+COMPRESSION_LEVEL convertToCompressionLevel(uint32_t num) {
+    auto compressionLevel = static_cast<COMPRESSION_LEVEL>(num);
+    switch (compressionLevel) {
+        case COMPACT:
+        case SLACK:
+            return compressionLevel;
+        default:
+            break;
+    }
+
+    std::string errMsg(std::string("Unknown value for COMPRESSION_LEVEL ") + std::to_string(num));
+    OPENFHE_THROW(config_error, errMsg);
+}
+std::ostream& operator<<(std::ostream& s, COMPRESSION_LEVEL p) {
+    switch (p) {
+        case COMPACT:
+            s << "COMPACT";
+            break;
+        case SLACK:
+            s << "SLACK";
+            break;
         default:
             s << "UNKNOWN";
             break;

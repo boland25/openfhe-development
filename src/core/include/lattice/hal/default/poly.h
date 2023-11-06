@@ -41,7 +41,7 @@
 #include "lattice/ilparams.h"
 
 #include "math/distrgen.h"
-#include "math/hal.h"
+#include "math/math-hal.h"
 #include "math/nbtheory.h"
 
 #include "utils/exception.h"
@@ -75,48 +75,112 @@ public:
     using TugType           = typename PolyInterfaceType::TugType;
     using BugType           = typename PolyInterfaceType::BugType;
 
-    static const std::string GetElementName() {
-        return "PolyImpl";
-    }
+    constexpr PolyImpl() = default;
 
-    ~PolyImpl() override = default;
-
-    PolyImpl();
     PolyImpl(const std::shared_ptr<Params>& params, Format format = Format::EVALUATION,
-             bool initializeElementToZero = false);
+             bool initializeElementToZero = false)
+        : m_format{format}, m_params{params} {
+        if (initializeElementToZero)
+            PolyImpl::SetValuesToZero();
+    }
     PolyImpl(const std::shared_ptr<ILDCRTParams<Integer>>& params, Format format = Format::EVALUATION,
              bool initializeElementToZero = false);
-    PolyImpl(bool initializeElementToMax, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION);
+
+    PolyImpl(bool initializeElementToMax, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION)
+        : m_format{format}, m_params{params} {
+        if (initializeElementToMax)
+            PolyImpl::SetValuesToMax();
+    }
     PolyImpl(const DggType& dgg, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION);
     PolyImpl(DugType& dug, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION);
     PolyImpl(const BugType& bug, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION);
     PolyImpl(const TugType& tug, const std::shared_ptr<Params>& params, Format format = Format::EVALUATION,
              uint32_t h = 0);
-    PolyImpl(const PolyType& element);
-    PolyImpl(const PolyNative& element, Format format);
-    PolyImpl(PolyType&& element);
 
-    const PolyType& operator=(const PolyType& rhs) override;
-    const PolyType& operator=(const std::vector<int32_t>& rhs) override;
-    const PolyType& operator=(const std::vector<int64_t>& rhs) override;
-    const PolyType& operator=(std::initializer_list<uint64_t> rhs) override;
-    const PolyType& operator=(std::initializer_list<std::string> rhs) override;
-    const PolyType& operator=(uint64_t val) override;
-    const PolyType& operator=(PolyType&& rhs) override;
+    template <typename T = VecType>
+    PolyImpl(const PolyNative& rhs, Format format,
+             typename std::enable_if_t<std::is_same_v<T, NativeVector>, bool> = true)
+        : m_format{rhs.m_format},
+          m_params{rhs.m_params},
+          m_values{rhs.m_values ? std::make_unique<VecType>(*rhs.m_values) : nullptr} {
+        PolyImpl<VecType>::SetFormat(format);
+    }
+
+    template <typename T = VecType>
+    PolyImpl(const PolyNative& rhs, Format format,
+             typename std::enable_if_t<!std::is_same_v<T, NativeVector>, bool> = true)
+        : m_format{rhs.GetFormat()} {
+        auto c{rhs.GetParams()->GetCyclotomicOrder()};
+        auto m{rhs.GetParams()->GetModulus().ConvertToInt()};
+        auto r{rhs.GetParams()->GetRootOfUnity().ConvertToInt()};
+        m_params = std::make_shared<PolyImpl::Params>(c, m, r);
+
+        const auto& v{rhs.GetValues()};
+        uint32_t vlen{m_params->GetRingDimension()};
+        VecType tmp(vlen);
+        tmp.SetModulus(m_params->GetModulus());
+        for (uint32_t i{0}; i < vlen; ++i)
+            tmp[i] = Integer(v[i]);
+        m_values = std::make_unique<VecType>(tmp);
+        PolyImpl<VecType>::SetFormat(format);
+    }
+
+    PolyImpl(const PolyType& p) noexcept
+        : m_format{p.m_format},
+          m_params{p.m_params},
+          m_values{p.m_values ? std::make_unique<VecType>(*p.m_values) : nullptr} {}
+
+    PolyImpl(PolyType&& p) noexcept
+        : m_format{p.m_format}, m_params{std::move(p.m_params)}, m_values{std::move(p.m_values)} {}
+
+    PolyType& operator=(const PolyType& rhs) noexcept override;
+    PolyType& operator=(PolyType&& rhs) noexcept override {
+        m_format = std::move(rhs.m_format);
+        m_params = std::move(rhs.m_params);
+        m_values = std::move(rhs.m_values);
+        return *this;
+    }
+    PolyType& operator=(const std::vector<int32_t>& rhs);
+    PolyType& operator=(const std::vector<int64_t>& rhs);
+    PolyType& operator=(std::initializer_list<uint64_t> rhs) override;
+    PolyType& operator=(std::initializer_list<std::string> rhs);
+    PolyType& operator=(uint64_t val);
 
     PolyNative DecryptionCRTInterpolate(PlaintextModulus ptm) const override;
-    PolyNative ToNativePoly() const final;
+    PolyNative ToNativePoly() const final {
+        usint vlen{m_params->GetRingDimension()};
+        auto c{m_params->GetCyclotomicOrder()};
+        NativeInteger m{std::numeric_limits<BasicInteger>::max()};
+        auto params{std::make_shared<ILParamsImpl<NativeInteger>>(c, m, 1)};
+        typename PolyImpl<VecType>::PolyNative tmp(params, m_format, true);
+        for (usint i = 0; i < vlen; ++i)
+            tmp[i] = NativeInteger((*m_values)[i]);
+        return tmp;
+    }
 
     void SetValues(const VecType& values, Format format) override;
     void SetValues(VecType&& values, Format format) override;
-    void SetValuesToZero() override;
-    void SetValuesToMax() override;
+
+    void SetValuesToZero() override {
+        usint r{m_params->GetRingDimension()};
+        m_values = std::make_unique<VecType>(r, m_params->GetModulus());
+    }
+
+    void SetValuesToMax() override {
+        usint r{m_params->GetRingDimension()};
+        auto max{m_params->GetModulus() - Integer(1)};
+        m_values = std::make_unique<VecType>(r, m_params->GetModulus(), max);
+    }
 
     inline Format GetFormat() const final {
         return m_format;
     }
 
-    inline const std::shared_ptr<Params>& GetParams() const final {
+    void OverrideFormat(const Format f) final {
+        m_format = f;
+    }
+
+    inline const std::shared_ptr<Params>& GetParams() const {
         return m_params;
     }
 
@@ -150,36 +214,78 @@ public:
         return (*m_values)[i];
     }
 
-    PolyImpl Plus(const PolyImpl& element) const override;
-    const PolyImpl& operator+=(const PolyImpl& element) override;
+    PolyImpl Plus(const PolyImpl& rhs) const override {
+        if (m_params->GetRingDimension() != rhs.m_params->GetRingDimension())
+            OPENFHE_THROW(math_error, "RingDimension missmatch");
+        if (m_params->GetModulus() != rhs.m_params->GetModulus())
+            OPENFHE_THROW(math_error, "Modulus missmatch");
+        if (m_format != rhs.m_format)
+            OPENFHE_THROW(not_implemented_error, "Format missmatch");
+        auto tmp(*this);
+        tmp.m_values->ModAddNoCheckEq(*rhs.m_values);
+        return tmp;
+    }
+    PolyImpl PlusNoCheck(const PolyImpl& rhs) const {
+        auto tmp(*this);
+        tmp.m_values->ModAddNoCheckEq(*rhs.m_values);
+        return tmp;
+    }
+    PolyImpl& operator+=(const PolyImpl& element) override;
 
     PolyImpl Plus(const Integer& element) const override;
-    inline const PolyImpl& operator+=(const Integer& element) override {
-        return *this = this->Plus(element);
+    PolyImpl& operator+=(const Integer& element) override {
+        return *this = this->Plus(element);  // don't change this
     }
 
     PolyImpl Minus(const PolyImpl& element) const override;
-    const PolyImpl& operator-=(const PolyImpl& element) override;
+    PolyImpl& operator-=(const PolyImpl& element) override;
 
     PolyImpl Minus(const Integer& element) const override;
-    inline const PolyImpl& operator-=(const Integer& element) override {
+    PolyImpl& operator-=(const Integer& element) override {
         m_values->ModSubEq(element);
         return *this;
     }
 
-    PolyImpl Times(const PolyImpl& element) const override;
-    PolyImpl TimesNoCheck(const PolyImpl& element) const override;
-    const PolyImpl& operator*=(const PolyImpl& element) override;
+    PolyImpl Times(const PolyImpl& rhs) const override {
+        if (m_params->GetRingDimension() != rhs.m_params->GetRingDimension())
+            OPENFHE_THROW(math_error, "RingDimension missmatch");
+        if (m_params->GetModulus() != rhs.m_params->GetModulus())
+            OPENFHE_THROW(math_error, "Modulus missmatch");
+        if (m_format != Format::EVALUATION || rhs.m_format != Format::EVALUATION)
+            OPENFHE_THROW(not_implemented_error, "operator* for PolyImpl supported only in Format::EVALUATION");
+        auto tmp(*this);
+        tmp.m_values->ModMulNoCheckEq(*rhs.m_values);
+        return tmp;
+    }
+    PolyImpl TimesNoCheck(const PolyImpl& rhs) const {
+        auto tmp(*this);
+        tmp.m_values->ModMulNoCheckEq(*rhs.m_values);
+        return tmp;
+    }
+    PolyImpl& operator*=(const PolyImpl& rhs) override {
+        if (m_params->GetRingDimension() != rhs.m_params->GetRingDimension())
+            OPENFHE_THROW(math_error, "RingDimension missmatch");
+        if (m_params->GetModulus() != rhs.m_params->GetModulus())
+            OPENFHE_THROW(math_error, "Modulus missmatch");
+        if (m_format != Format::EVALUATION || rhs.m_format != Format::EVALUATION)
+            OPENFHE_THROW(not_implemented_error, "operator* for PolyImpl supported only in Format::EVALUATION");
+        if (m_values) {
+            m_values->ModMulNoCheckEq(*rhs.m_values);
+            return *this;
+        }
+        m_values = std::make_unique<VecType>(m_params->GetRingDimension(), m_params->GetModulus());
+        return *this;
+    }
 
     PolyImpl Times(const Integer& element) const override;
-    inline const PolyImpl& operator*=(const Integer& element) override {
+    PolyImpl& operator*=(const Integer& element) override {
         m_values->ModMulEq(element);
         return *this;
     }
 
     PolyImpl Times(NativeInteger::SignedNativeInt element) const override;
 #if NATIVEINT != 64
-    inline PolyImpl Times(int64_t element) const override {
+    inline PolyImpl Times(int64_t element) const {
         return this->Times(static_cast<NativeInteger::SignedNativeInt>(element));
     }
 #endif
@@ -188,7 +294,7 @@ public:
     PolyImpl DivideAndRound(const Integer& q) const override;
 
     PolyImpl Negate() const override;
-    PolyImpl operator-() const override {
+    inline PolyImpl operator-() const override {
         return PolyImpl(m_params, m_format, true) -= *this;
     }
 
@@ -198,8 +304,8 @@ public:
     }
 
     void AddILElementOne() override;
-    PolyImpl AutomorphismTransform(const usint& k) const override;
-    PolyImpl AutomorphismTransform(usint i, const std::vector<usint>& vec) const override;
+    PolyImpl AutomorphismTransform(uint32_t k) const override;
+    PolyImpl AutomorphismTransform(uint32_t k, const std::vector<uint32_t>& vec) const override;
     PolyImpl MultiplicativeInverse() const override;
     PolyImpl ModByTwo() const override;
     PolyImpl Mod(const Integer& modulus) const override;
@@ -207,7 +313,7 @@ public:
     void SwitchModulus(const Integer& modulus, const Integer& rootOfUnity, const Integer& modulusArb,
                        const Integer& rootOfUnityArb) override;
     void SwitchFormat() override;
-    void MakeSparse(const uint32_t& wFactor) override;
+    void MakeSparse(uint32_t wFactor) override;
     bool InverseExists() const override;
     double Norm() const override;
     std::vector<PolyImpl> BaseDecompose(usint baseBits, bool evalModeAnswer) const override;
@@ -231,17 +337,22 @@ public:
         ar(::cereal::make_nvp("p", m_params));
     }
 
+    static const std::string GetElementName() {
+        return "PolyImpl";
+    }
+
     std::string SerializedObjectName() const override {
         return "Poly";
     }
+
     static uint32_t SerializedVersion() {
         return 1;
     }
 
 protected:
-    Format m_format;
-    std::shared_ptr<Params> m_params;
-    std::unique_ptr<VecType> m_values;
+    Format m_format{Format::EVALUATION};
+    std::shared_ptr<Params> m_params{nullptr};
+    std::unique_ptr<VecType> m_values{nullptr};
     void ArbitrarySwitchFormat();
 };
 

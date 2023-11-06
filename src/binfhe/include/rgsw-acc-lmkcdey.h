@@ -1,7 +1,7 @@
 //==================================================================================
 // BSD 2-Clause License
 //
-// Copyright (c) 2014-2022, NJIT, Duality Technologies Inc. and other contributors
+// Copyright (c) 2014-2023, NJIT, Duality Technologies Inc. and other contributors
 //
 // All rights reserved.
 //
@@ -40,50 +40,79 @@ namespace lbcrypto {
 
 /**
  * @brief Ring GSW accumulator schemes described in
- * https://eprint.iacr.org/2014/816 and https://eprint.iacr.org/2020/08
+ * https://eprint.iacr.org/2022/198
  */
-class RingGSWAccumulatorLMKCDEY : public RingGSWAccumulator {
+class RingGSWAccumulatorLMKCDEY final : public RingGSWAccumulator {
 public:
     RingGSWAccumulatorLMKCDEY() = default;
 
-    virtual ~RingGSWAccumulatorLMKCDEY() {}
-
     /**
-   * Internal RingGSW encryption used in generating the refreshing key
+   * Key generation for internal Ring GSW as described in https://eprint.iacr.org/2022/198
    *
    * @param params a shared pointer to RingGSW scheme parameters
-   * @param skFFT secret key polynomial in the EVALUATION representation
-   * @param m plaintext (corresponds to a lookup entry for the LWE scheme secret
-   * key)
-   * @return a shared pointer to the resulting ciphertext
+   * @param skNTT secret key polynomial in the EVALUATION representation
+   * @param LWEsk the secret key
+   * @return a shared pointer to the resulting keys
    */
-    RingGSWACCKey KeyGenAcc(const std::shared_ptr<RingGSWCryptoParams> params, const NativePoly& skNTT,
-                            ConstLWEPrivateKey LWEsk) const override;
+    RingGSWACCKey KeyGenAcc(const std::shared_ptr<RingGSWCryptoParams>& params, const NativePoly& skNTT,
+                            ConstLWEPrivateKey& LWEsk) const override;
 
     /**
-   * Main accumulator function used in bootstrapping - AP variant
+   * Main accumulator function used in bootstrapping - LMKCDEY variant
    *
    * @param params a shared pointer to RingGSW scheme parameters
-   * @param &input input ciphertext
+   * @param ek the accumulator key
    * @param acc previous value of the accumulator
+   * @param a value to update the accumulator with
    */
-    void EvalAcc(const std::shared_ptr<RingGSWCryptoParams> params, const RingGSWACCKey ek, RLWECiphertext& acc,
+    void EvalAcc(const std::shared_ptr<RingGSWCryptoParams>& params, ConstRingGSWACCKey& ek, RLWECiphertext& acc,
                  const NativeVector& a) const override;
 
 private:
-    const uint32_t m_window = 10;
+    /**
+   * LMKCDEY Key generation for internal Ring GSW as described in https://eprint.iacr.org/2022/198
+   *
+   * @param params a shared pointer to RingGSW scheme parameters
+   * @param skNTT secret key polynomial in the EVALUATION representation
+   * @param m a plaintext
+   * @return a shared pointer to the resulting keys
+   */
+    RingGSWEvalKey KeyGenLMKCDEY(const std::shared_ptr<RingGSWCryptoParams>& params, const NativePoly& skNTT,
+                                 LWEPlaintext m) const;
 
-    RingGSWEvalKey KeyGenLMKCDEY(const std::shared_ptr<RingGSWCryptoParams> params, const NativePoly& skNTT,
-                            const LWEPlaintext& m) const;
-                            
-    RingGSWEvalKey KeyGenAuto(const std::shared_ptr<RingGSWCryptoParams> params, const NativePoly& skNTT,
-                            const LWEPlaintext& k) const;
+    /**
+   * Automorphism keys generation for internal Ring GSW as described in https://eprint.iacr.org/2022/198
+   *
+   * @param params a shared pointer to RingGSW scheme parameters
+   * @param skNTT secret key polynomial in the EVALUATION representation
+   * @param k a plaintext
+   * @return a shared pointer to the resulting keys
+   */
+    RingGSWEvalKey KeyGenAuto(const std::shared_ptr<RingGSWCryptoParams>& params, const NativePoly& skNTT,
+                              LWEPlaintext k) const;
 
-    void AddToAccLMKCDEY(const std::shared_ptr<RingGSWCryptoParams> params, const RingGSWEvalKey ek,
-                    RLWECiphertext& acc) const;
+    /**
+   * LMKCDEY Accumulation as described in https://eprint.iacr.org/2022/198
+   *
+   * @param params a shared pointer to RingGSW scheme parameters
+   * @param ek evaluation key for Ring GSW
+   * @param acc previous value of the accumulator
+   * @return
+   */
+    void AddToAccLMKCDEY(const std::shared_ptr<RingGSWCryptoParams>& params, ConstRingGSWEvalKey& ek,
+                         RLWECiphertext& acc) const;
 
-    void Automorphism(const std::shared_ptr<RingGSWCryptoParams> params, const NativeInteger &a,
-                        const RingGSWEvalKey ak, RLWECiphertext& acc) const;
+    /**
+   * LMKCDEY Accumulation automorphism evaluation as described in https://eprint.iacr.org/2022/198
+   *
+   * @param params a shared pointer to RingGSW scheme parameters
+   * @param a index
+   * @param ak evaluation key for Ring GSW
+   * @param acc previous value of the accumulator
+   * @return
+   */
+    void Automorphism(const std::shared_ptr<RingGSWCryptoParams>& params, const NativeInteger& a,
+                      ConstRingGSWEvalKey& ak, RLWECiphertext& acc) const;
 };
 
 }  // namespace lbcrypto

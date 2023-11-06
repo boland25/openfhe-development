@@ -1,7 +1,7 @@
 //==================================================================================
 // BSD 2-Clause License
 //
-// Copyright (c) 2014-2022, NJIT, Duality Technologies Inc. and other contributors
+// Copyright (c) 2014-2023, NJIT, Duality Technologies Inc. and other contributors
 //
 // All rights reserved.
 //
@@ -29,29 +29,28 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //==================================================================================
 
-/*
-  This file contains the main class for native integers
+#ifndef _CONSTANTS_LATTICE_H_
+#define _CONSTANTS_LATTICE_H_
+
+#include <iosfwd>
+#include <string>
+#include <cstdint>
+
+namespace lbcrypto {
+
+/**
+ * @brief Lists all modes for RLWE schemes, such as BGV and BFV, and for LWE schemes, such as DM and TFHE
  */
+enum SecretKeyDist {
+    GAUSSIAN        = 0,
+    UNIFORM_TERNARY = 1,  // Default value, all schemes support this key distribution
+    SPARSE_TERNARY  = 2,
+    // BINARY = 3, // Future implementation
+};
+SecretKeyDist convertToSecretKeyDist(const std::string& str);
+SecretKeyDist convertToSecretKeyDist(uint32_t num);
+std::ostream& operator<<(std::ostream& s, SecretKeyDist m);
 
-#include "math/hal.h"
+}  // namespace lbcrypto
 
-namespace intnat {
-
-// STRINGS & STREAMS
-
-// helper template to stream vector contents provided T has an stream operator<<
-template <typename T>
-std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
-    os << "[";
-    // for (const auto itr : v){
-    for (const auto& i : v) {
-        os << " " << i;
-    }
-    os << " ]";
-    return os;
-}
-
-// to stream internal representation
-template std::ostream& operator<< <uint64_t>(std::ostream& os, const std::vector<uint64_t>& v);
-
-}  // namespace intnat
+#endif  // _CONSTANTS_LATTICE_H_
